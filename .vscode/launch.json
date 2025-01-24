@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug Chrome Extension",
+      "url": "https://www.linkedin.com/feed/",
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}/apps/extension/build/chrome-mv3-dev"
+      ],
+      "webRoot": "${workspaceFolder}/apps/extension",
+      "sourceMaps": true,
+      "userDataDir": true,
+      "trace": true
+    }
+  ]
+}

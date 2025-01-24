@@ -1,0 +1,20 @@
+{
+  "folders": [
+    {
+      "path": ".",
+    },
+    {
+      "path": "apps/web",
+    },
+    {
+      "path": "apps/web/app/experiments",
+    },
+    {
+      "path": "packages/shared-types",
+    },
+    {
+      "path": "packages/db",
+    },
+  ],
+  "settings": {},
+}
