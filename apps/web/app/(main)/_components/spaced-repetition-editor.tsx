@@ -172,9 +172,7 @@ const SpacedRepetitionEditor: React.FC = () => {
             <div className="text-sm text-gray-500">
               {isInputMode
                 ? "Enter your text below"
-                : conversation
-                  ? "Select text to generate questions"
-                  : "Double tap text area to edit"}
+                : "Select text to generate questions"}
             </div>
             <Button
               variant="outline"
@@ -218,7 +216,6 @@ const SpacedRepetitionEditor: React.FC = () => {
                 className="w-full h-full min-h-[600px] p-2 whitespace-pre-wrap border rounded-lg relative select-text cursor-text"
                 onMouseUp={handleTextSelection}
                 onKeyUp={handleTextSelection}
-                onDoubleClick={() => setIsInputMode(true)}
               >
                 {renderContent()}
               </div>
