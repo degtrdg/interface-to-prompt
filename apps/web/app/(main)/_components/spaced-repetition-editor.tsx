@@ -7,17 +7,11 @@ import { Separator } from "@/components/ui/separator";
 import { NewQuestionForm } from "@/app/_components/new-question-form";
 import { FlashCard as FlashCardComponent } from "@/app/_components/flash-card";
 import { FlashCardType, SelectionRange } from "@/lib/types/flashcard";
-
-const mockGenerateQuestions = (): FlashCardType[] => [
-  {
-    front: "What happens when electrons move through a conductor?",
-    back: "They collide with atoms, creating resistance and heat",
-  },
-  {
-    front: "Why do some materials become superconductors at low temperatures?",
-    back: "Electrons form Cooper pairs that move without collisions",
-  },
-];
+import {
+  formatContent,
+  generateQuestions,
+} from "@/actions/content-format-actions";
+import { FocusCardsReview } from "@/app/(main)/_components/focus-cards-review";
 
 const SpacedRepetitionEditor: React.FC = () => {
   // Conversation data
@@ -33,10 +27,18 @@ const SpacedRepetitionEditor: React.FC = () => {
   // Card data
   const [cards, setCards] = useState<FlashCardType[]>([]);
   const [generatedCards, setGeneratedCards] = useState<FlashCardType[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Refs
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+
+  // Loading state for formatting
+  const [isFormatting, setIsFormatting] = useState(false);
+
+  // Add new state for focus mode
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [focusedCardIndex, setFocusedCardIndex] = useState(0);
 
   // Handle content updates
   const handleContentUpdate = (content: string) => {
@@ -84,18 +86,22 @@ const SpacedRepetitionEditor: React.FC = () => {
   }, []);
 
   // Generate new questions from selected text
-  const handleGenerateClick = () => {
-    if (!selectedText) return;
-    const newQuestions = mockGenerateQuestions();
-    // Store the generated version as the original
-    const questionsWithOriginal = newQuestions.map((q) => ({
-      ...q,
-      original: {
-        front: q.front,
-        back: q.back,
-      },
-    }));
-    setGeneratedCards(questionsWithOriginal);
+  const handleGenerateClick = async () => {
+    if (!selectedText || isGenerating) return;
+
+    setIsGenerating(true);
+    try {
+      const newQuestions = await generateQuestions(
+        conversation,
+        selectedText,
+        cards
+      );
+      setGeneratedCards(newQuestions);
+    } catch (error) {
+      console.error("Error generating questions:", error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Update an existing or generated card
@@ -105,6 +111,7 @@ const SpacedRepetitionEditor: React.FC = () => {
     isGenerated = false
   ) => {
     if (isGenerated) {
+      // Just update the generated card in place
       setGeneratedCards((prev) => {
         const newCards = [...prev];
         newCards[index] = updatedCard;
@@ -130,18 +137,14 @@ const SpacedRepetitionEditor: React.FC = () => {
 
   // Accept a generated card and move it to the main list
   const handleAcceptGenerated = (card: FlashCardType) => {
-    // Ensure we preserve the original version when accepting
-    const cardToAdd = card.original
-      ? card
-      : {
-          ...card,
-          original: {
-            front: card.front,
-            back: card.back,
-          },
-        };
+    const cardToAdd = {
+      ...card,
+      original: card.original || {
+        front: card.front,
+        back: card.back,
+      },
+    };
     setCards((prev) => [...prev, cardToAdd]);
-    setGeneratedCards((prev) => prev.filter((c) => c !== card));
   };
 
   // Conditionally highlight selection
@@ -163,6 +166,111 @@ const SpacedRepetitionEditor: React.FC = () => {
     return conversation;
   };
 
+  const handleFormatClick = async () => {
+    if (!conversation || isFormatting) return;
+    setIsFormatting(true);
+    try {
+      const formattedContent = await formatContent(conversation);
+      setConversation(formattedContent);
+    } finally {
+      setIsFormatting(false);
+    }
+  };
+
+  // Add keyboard navigation handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isFocusMode) return;
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "ArrowLeft") {
+        setFocusedCardIndex((prev) => Math.max(0, prev - 1));
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "ArrowRight") {
+        setFocusedCardIndex((prev) =>
+          Math.min(generatedCards.length - 1, prev + 1)
+        );
+      } else if (e.key === "Escape") {
+        setIsFocusMode(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFocusMode, generatedCards.length, focusedCardIndex]);
+
+  // Modify the right side JSX
+  const renderRightSide = () => {
+    if (isFocusMode && generatedCards.length > 0) {
+      return (
+        <FocusCardsReview
+          generatedCards={generatedCards}
+          onUpdate={(index, updatedCard) =>
+            handleUpdateCard(index, updatedCard, true)
+          }
+          onDelete={(index) => {
+            handleDeleteCard(index, true);
+          }}
+          onCloseFocus={() => setIsFocusMode(false)}
+          onAccept={handleAcceptGenerated}
+        />
+      );
+    }
+
+    return (
+      <div className="w-1/2 flex flex-col gap-4">
+        <NewQuestionForm
+          onAdd={(card) => setCards((prev) => [...prev, card])}
+        />
+
+        {selectedText && !isInputMode && (
+          <Button
+            onClick={handleGenerateClick}
+            className="w-full"
+            disabled={isGenerating}
+          >
+            {isGenerating
+              ? "Generating Questions..."
+              : "Generate Questions from Selection"}
+          </Button>
+        )}
+
+        {/* New Questions Queue Button */}
+        {generatedCards.length > 0 && (
+          <Button
+            className="w-full"
+            onClick={() => setIsFocusMode(true)}
+            variant="outline"
+          >
+            Review New Questions ({generatedCards.length})
+          </Button>
+        )}
+
+        <Separator className="my-2" />
+
+        {/* Existing cards */}
+        {cards.length > 0 && (
+          <Card className="flex-1 p-4">
+            <h3 className="font-medium mb-3">
+              Existing Cards ({cards.length})
+            </h3>
+            <ScrollArea className="h-[calc(100vh-400px)]">
+              <div className="space-y-3">
+                {cards.map((card, i) => (
+                  <FlashCardComponent
+                    key={i}
+                    card={card}
+                    index={i}
+                    onUpdate={handleUpdateCard}
+                    onDelete={handleDeleteCard}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-screen gap-4 p-4 bg-gray-100">
       {/* Left side - Conversation Editor */}
@@ -174,17 +282,27 @@ const SpacedRepetitionEditor: React.FC = () => {
                 ? "Enter your text below"
                 : "Select text to generate questions"}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsInputMode(!isInputMode);
-                setSelectedText("");
-                setSelectionRange(null);
-              }}
-            >
-              {isInputMode ? "Done Editing" : "Edit Text"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleFormatClick}
+                disabled={isFormatting}
+              >
+                {isFormatting ? "Formatting..." : "Format Content"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsInputMode(!isInputMode);
+                  setSelectedText("");
+                  setSelectionRange(null);
+                }}
+              >
+                {isInputMode ? "Done Editing" : "Edit Text"}
+              </Button>
+            </div>
           </div>
           <ScrollArea className="flex-1">
             {isInputMode ? (
@@ -213,7 +331,7 @@ const SpacedRepetitionEditor: React.FC = () => {
             ) : (
               <div
                 ref={viewerRef}
-                className="w-full h-full min-h-[600px] p-2 whitespace-pre-wrap border rounded-lg relative select-text cursor-text"
+                className="w-full h-full min-h-[600px] p-2 whitespace-pre-wrap border rounded-lg relative select-text cursor-text font-mono "
                 onMouseUp={handleTextSelection}
                 onKeyUp={handleTextSelection}
               >
@@ -225,68 +343,7 @@ const SpacedRepetitionEditor: React.FC = () => {
       </div>
 
       {/* Right side - Card Management */}
-      <div className="w-1/2 flex flex-col gap-4">
-        <NewQuestionForm
-          onAdd={(card) => setCards((prev) => [...prev, card])}
-        />
-
-        {selectedText && !isInputMode && (
-          <Button onClick={handleGenerateClick} className="w-full">
-            Generate Questions from Selection
-          </Button>
-        )}
-
-        {/* Generated questions */}
-        {generatedCards.length > 0 && (
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium">New Questions</h3>
-              <div className="text-sm text-gray-500">
-                Edit and press Enter to accept
-              </div>
-            </div>
-            <div className="space-y-3">
-              {generatedCards.map((card, i) => (
-                <FlashCardComponent
-                  key={i}
-                  card={card}
-                  index={i}
-                  onUpdate={(index, updatedCard) => {
-                    handleUpdateCard(index, updatedCard, true);
-                    handleAcceptGenerated(updatedCard);
-                  }}
-                  onDelete={(index) => handleDeleteCard(index, true)}
-                  isNew={true}
-                />
-              ))}
-            </div>
-          </Card>
-        )}
-
-        <Separator className="my-2" />
-
-        {/* Existing cards */}
-        {cards.length > 0 && (
-          <Card className="flex-1 p-4">
-            <h3 className="font-medium mb-3">
-              Existing Cards ({cards.length})
-            </h3>
-            <ScrollArea className="h-[calc(100vh-400px)]">
-              <div className="space-y-3">
-                {cards.map((card, i) => (
-                  <FlashCardComponent
-                    key={i}
-                    card={card}
-                    index={i}
-                    onUpdate={handleUpdateCard}
-                    onDelete={handleDeleteCard}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
-          </Card>
-        )}
-      </div>
+      {renderRightSide()}
     </div>
   );
 };

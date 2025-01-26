@@ -28,6 +28,10 @@ export const FlashCard: React.FC<FlashCardProps> = ({
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setIsEditing(isNew);
+  }, [isNew]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
         setIsEditing(false);
@@ -44,8 +48,6 @@ export const FlashCard: React.FC<FlashCardProps> = ({
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      setIsEditing(false);
-      // When saving, store the original if this is the first edit
       if (!editedCard.original) {
         onUpdate(index, {
           ...editedCard,
@@ -57,6 +59,7 @@ export const FlashCard: React.FC<FlashCardProps> = ({
       } else {
         onUpdate(index, editedCard);
       }
+      setIsEditing(false);
     } else if (e.key === "Escape") {
       setIsEditing(false);
       setEditedCard(card);
