@@ -12,6 +12,15 @@ import {
   generateQuestions,
 } from "@/actions/content-format-actions";
 import { FocusCardsReview } from "@/app/(main)/_components/focus-cards-review";
+import { FocusTextReview } from "@/app/(main)/_components/focus-text-review";
+import { generateId } from "@/lib/utils/generateId";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
+import { DeletedCardsManager } from "@/app/_components/deleted-cards-manager";
 
 const SpacedRepetitionEditor: React.FC = () => {
   // Conversation data
@@ -39,6 +48,16 @@ const SpacedRepetitionEditor: React.FC = () => {
   // Add new state for focus mode
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [focusedCardIndex, setFocusedCardIndex] = useState(0);
+
+  // Add new state for text focus mode
+  const [isTextFocusMode, setIsTextFocusMode] = useState(false);
+  const [textSections, setTextSections] = useState<string[]>([]);
+
+  // Add new state for deleted cards
+  const [deletedCards, setDeletedCards] = useState<FlashCardType[]>([]);
+
+  // Add new state for deleted cards expansion
+  const [isDeletedCardsExpanded, setIsDeletedCardsExpanded] = useState(false);
 
   // Handle content updates
   const handleContentUpdate = (content: string) => {
@@ -85,9 +104,26 @@ const SpacedRepetitionEditor: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Generate new questions from selected text
+  // Add cleanup function for deleted cards
+  const cleanupDeletedCards = () => {
+    if (deletedCards.length <= cards.length) return;
+
+    // Sort by date, keep only the most recent ones up to cards.length
+    const sortedCards = [...deletedCards].sort((a, b) => {
+      const dateA = a.deletedAt ? new Date(a.deletedAt).getTime() : 0;
+      const dateB = b.deletedAt ? new Date(b.deletedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    setDeletedCards(sortedCards.slice(0, cards.length));
+  };
+
+  // Update handleGenerateClick to cleanup deleted cards
   const handleGenerateClick = async () => {
     if (!selectedText || isGenerating) return;
+
+    // Cleanup excess deleted cards before generating new ones
+    cleanupDeletedCards();
 
     setIsGenerating(true);
     try {
@@ -96,7 +132,14 @@ const SpacedRepetitionEditor: React.FC = () => {
         selectedText,
         cards
       );
-      setGeneratedCards(newQuestions);
+      const newQuestionsWithId = newQuestions.map((card) => ({
+        ...card,
+        id: generateId(),
+      }));
+      setGeneratedCards(newQuestionsWithId);
+      if (newQuestionsWithId.length > 0) {
+        setIsFocusMode(true);
+      }
     } catch (error) {
       console.error("Error generating questions:", error);
     } finally {
@@ -104,41 +147,46 @@ const SpacedRepetitionEditor: React.FC = () => {
     }
   };
 
-  // Update an existing or generated card
+  // Update card management functions to use IDs
   const handleUpdateCard = (
-    index: number,
     updatedCard: FlashCardType,
     isGenerated = false
   ) => {
     if (isGenerated) {
-      // Just update the generated card in place
-      setGeneratedCards((prev) => {
-        const newCards = [...prev];
-        newCards[index] = updatedCard;
-        return newCards;
-      });
+      setGeneratedCards((prev) =>
+        prev.map((card) => (card.id === updatedCard.id ? updatedCard : card))
+      );
     } else {
-      setCards((prev) => {
-        const newCards = [...prev];
-        newCards[index] = updatedCard;
-        return newCards;
-      });
+      setCards((prev) =>
+        prev.map((card) => (card.id === updatedCard.id ? updatedCard : card))
+      );
     }
   };
 
-  // Delete a card
-  const handleDeleteCard = (index: number, isGenerated = false) => {
+  const handleDeleteCard = (
+    cardToDelete: FlashCardType,
+    isGenerated = false
+  ) => {
+    const deletedCard: FlashCardType = {
+      ...cardToDelete,
+      deletedAt: new Date().toISOString(),
+      source: isGenerated ? "generated" : "manual",
+    };
+    setDeletedCards((prev) => [...prev, deletedCard]);
+
     if (isGenerated) {
-      setGeneratedCards((prev) => prev.filter((_, i) => i !== index));
+      setGeneratedCards((prev) =>
+        prev.filter((card) => card.id !== cardToDelete.id)
+      );
     } else {
-      setCards((prev) => prev.filter((_, i) => i !== index));
+      setCards((prev) => prev.filter((card) => card.id !== cardToDelete.id));
     }
   };
 
-  // Accept a generated card and move it to the main list
   const handleAcceptGenerated = (card: FlashCardType) => {
     const cardToAdd = {
       ...card,
+      id: generateId(), // New ID for accepted card
       original: card.original || {
         front: card.front,
         back: card.back,
@@ -172,6 +220,18 @@ const SpacedRepetitionEditor: React.FC = () => {
     try {
       const formattedContent = await formatContent(conversation);
       setConversation(formattedContent);
+
+      // Split the formatted content into sections and enter text focus mode
+      const sections = formattedContent
+        .split("---")
+        .map((section) => section.trim())
+        .filter((section) => section.length > 0);
+
+      if (sections.length > 0) {
+        setTextSections(sections);
+        setIsTextFocusMode(true);
+        setIsInputMode(false);
+      }
     } finally {
       setIsFormatting(false);
     }
@@ -197,150 +257,205 @@ const SpacedRepetitionEditor: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFocusMode, generatedCards.length, focusedCardIndex]);
 
-  // Modify the right side JSX
+  // Add handler to permanently delete a card from deleted cards
+  const handlePermanentDelete = (cardToDelete: FlashCardType) => {
+    setDeletedCards((prev) =>
+      prev.filter(
+        (card) =>
+          card.front !== cardToDelete.front || card.back !== cardToDelete.back
+      )
+    );
+  };
+
+  // Modify renderRightSide to use Collapsible
   const renderRightSide = () => {
     if (isFocusMode && generatedCards.length > 0) {
       return (
-        <FocusCardsReview
-          generatedCards={generatedCards}
-          onUpdate={(index, updatedCard) =>
-            handleUpdateCard(index, updatedCard, true)
-          }
-          onDelete={(index) => {
-            handleDeleteCard(index, true);
+        <div className="w-1/2 flex justify-center">
+          <FocusCardsReview
+            generatedCards={generatedCards}
+            onUpdate={(updatedCard) => handleUpdateCard(updatedCard, true)}
+            onDelete={(card) => handleDeleteCard(card, true)}
+            onCloseFocus={() => setIsFocusMode(false)}
+            onAccept={handleAcceptGenerated}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-1/2 overflow-auto h-screen pb-4">
+        <div className="flex flex-col gap-4 p-4">
+          {/* Primary Action - Review Generated Questions */}
+          {generatedCards.length > 0 && (
+            <Card className="p-6">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-lg font-medium">New Questions Ready!</h3>
+                <p className="text-sm text-gray-500">
+                  {generatedCards.length} questions have been generated from
+                  your text. Review them to add to your collection.
+                </p>
+                <Button
+                  size="lg"
+                  className="w-full mt-2"
+                  onClick={() => setIsFocusMode(true)}
+                >
+                  Review {generatedCards.length} Generated Questions
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {/* Secondary Actions */}
+          <div className="flex items-center gap-2">
+            <Collapsible className="w-full">
+              <CollapsibleTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <ChevronDown className="h-4 w-4 mr-2 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                  Add Cards Manually
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-4">
+                <NewQuestionForm
+                  onAdd={(card) => setCards((prev) => [...prev, card])}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+
+          <Separator className="my-2" />
+
+          {/* Existing cards */}
+          {cards.length > 0 && (
+            <Card className="p-4">
+              <Collapsible defaultOpen>
+                <div className="flex items-center justify-between">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:opacity-80 py-2">
+                    <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                    <h3 className="font-medium">
+                      Existing Cards ({cards.length})
+                    </h3>
+                  </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent className="pt-2">
+                  <div className="space-y-3">
+                    {cards.map((card) => (
+                      <FlashCardComponent
+                        key={card.id}
+                        card={card}
+                        onUpdate={(updatedCard) =>
+                          handleUpdateCard(updatedCard)
+                        }
+                        onDelete={() => handleDeleteCard(card)}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
+          )}
+
+          {/* Deleted cards section */}
+          <DeletedCardsManager
+            deletedCards={deletedCards}
+            currentCardsCount={cards.length}
+            onPermanentDelete={handlePermanentDelete}
+            onClearAll={() => setDeletedCards([])}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // Modify the left side JSX to conditionally render FocusTextReview
+  const renderLeftSide = () => {
+    if (isTextFocusMode) {
+      return (
+        <FocusTextReview
+          sections={textSections}
+          onGenerateQuestions={(selectedText) => {
+            setSelectedText(selectedText);
+            return handleGenerateClick();
           }}
-          onCloseFocus={() => setIsFocusMode(false)}
-          onAccept={handleAcceptGenerated}
+          onCloseFocus={() => setIsTextFocusMode(false)}
+          isGenerating={isGenerating}
         />
       );
     }
 
     return (
-      <div className="w-1/2 flex flex-col gap-4">
-        <NewQuestionForm
-          onAdd={(card) => setCards((prev) => [...prev, card])}
-        />
-
-        {selectedText && !isInputMode && (
-          <Button
-            onClick={handleGenerateClick}
-            className="w-full"
-            disabled={isGenerating}
-          >
-            {isGenerating
-              ? "Generating Questions..."
-              : "Generate Questions from Selection"}
-          </Button>
-        )}
-
-        {/* New Questions Queue Button */}
-        {generatedCards.length > 0 && (
-          <Button
-            className="w-full"
-            onClick={() => setIsFocusMode(true)}
-            variant="outline"
-          >
-            Review New Questions ({generatedCards.length})
-          </Button>
-        )}
-
-        <Separator className="my-2" />
-
-        {/* Existing cards */}
-        {cards.length > 0 && (
-          <Card className="flex-1 p-4">
-            <h3 className="font-medium mb-3">
-              Existing Cards ({cards.length})
-            </h3>
-            <ScrollArea className="h-[calc(100vh-400px)]">
-              <div className="space-y-3">
-                {cards.map((card, i) => (
-                  <FlashCardComponent
-                    key={i}
-                    card={card}
-                    index={i}
-                    onUpdate={handleUpdateCard}
-                    onDelete={handleDeleteCard}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
-          </Card>
-        )}
-      </div>
+      <Card className="h-full p-4 flex flex-col">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm text-gray-500">
+            {isInputMode
+              ? "Enter your text below"
+              : "Select text to generate questions"}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleFormatClick}
+              disabled={isFormatting}
+            >
+              {isFormatting ? "Formatting..." : "Format Content"}
+            </Button>
+            {/* <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsInputMode(!isInputMode);
+                setSelectedText("");
+                setSelectionRange(null);
+              }}
+            >
+              {isInputMode ? "Done Editing" : "Edit Text"}
+            </Button> */}
+          </div>
+        </div>
+        <ScrollArea className="flex-1">
+          {isInputMode ? (
+            <textarea
+              ref={editorRef}
+              className="w-full h-full min-h-[600px] p-2 whitespace-pre-wrap border rounded-lg resize-none"
+              value={conversation}
+              onChange={(e) => handleContentUpdate(e.target.value)}
+              onSelect={(e) => {
+                const textarea = e.currentTarget;
+                const selectionStart = textarea.selectionStart;
+                const selectionEnd = textarea.selectionEnd;
+                if (selectionEnd > selectionStart) {
+                  const selected = textarea.value.substring(
+                    selectionStart,
+                    selectionEnd
+                  );
+                  setSelectedText(selected);
+                  setSelectionRange({
+                    start: selectionStart,
+                    end: selectionEnd,
+                  });
+                }
+              }}
+            />
+          ) : (
+            <div
+              ref={viewerRef}
+              className="w-full h-full min-h-[600px] p-2 whitespace-pre-wrap border rounded-lg relative select-text cursor-text font-mono "
+              onMouseUp={handleTextSelection}
+              onKeyUp={handleTextSelection}
+            >
+              {renderContent()}
+            </div>
+          )}
+        </ScrollArea>
+      </Card>
     );
   };
 
   return (
-    <div className="flex h-screen gap-4 p-4 bg-gray-100">
+    <div className="h-screen flex gap-4 p-4 bg-gray-100 overflow-hidden">
       {/* Left side - Conversation Editor */}
-      <div className="w-1/2">
-        <Card className="h-full p-4 flex flex-col">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-gray-500">
-              {isInputMode
-                ? "Enter your text below"
-                : "Select text to generate questions"}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleFormatClick}
-                disabled={isFormatting}
-              >
-                {isFormatting ? "Formatting..." : "Format Content"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsInputMode(!isInputMode);
-                  setSelectedText("");
-                  setSelectionRange(null);
-                }}
-              >
-                {isInputMode ? "Done Editing" : "Edit Text"}
-              </Button>
-            </div>
-          </div>
-          <ScrollArea className="flex-1">
-            {isInputMode ? (
-              <textarea
-                ref={editorRef}
-                className="w-full h-full min-h-[600px] p-2 whitespace-pre-wrap border rounded-lg resize-none"
-                value={conversation}
-                onChange={(e) => handleContentUpdate(e.target.value)}
-                onSelect={(e) => {
-                  const textarea = e.currentTarget;
-                  const selectionStart = textarea.selectionStart;
-                  const selectionEnd = textarea.selectionEnd;
-                  if (selectionEnd > selectionStart) {
-                    const selected = textarea.value.substring(
-                      selectionStart,
-                      selectionEnd
-                    );
-                    setSelectedText(selected);
-                    setSelectionRange({
-                      start: selectionStart,
-                      end: selectionEnd,
-                    });
-                  }
-                }}
-              />
-            ) : (
-              <div
-                ref={viewerRef}
-                className="w-full h-full min-h-[600px] p-2 whitespace-pre-wrap border rounded-lg relative select-text cursor-text font-mono "
-                onMouseUp={handleTextSelection}
-                onKeyUp={handleTextSelection}
-              >
-                {renderContent()}
-              </div>
-            )}
-          </ScrollArea>
-        </Card>
-      </div>
+      <div className="w-1/2">{renderLeftSide()}</div>
 
       {/* Right side - Card Management */}
       {renderRightSide()}

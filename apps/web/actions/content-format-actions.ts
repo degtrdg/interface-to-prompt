@@ -23,7 +23,9 @@ const FlashCardSchema = z.object({
 });
 
 const getContentFormatterPrompt = (content: string) =>
-  `output this verbatim with nothing left out but formatted in a way makes it easier to read. if you see artifacts of bad copy-pasting (like stuff that could plausibly be from a button, random text that doesn't make sense in the sentence that was interleaved from something which removed make it easier to read etc.), remove them, otherwise keep everything the same. only output in a \`\`\`txt codeblock, no commentary since ill use grep to extract the content. add --- delineations between sections if you see fit. remove and add newlines where you see fit but try to keep it tight (like within lists) without excessive spacing so that it's information dense. do not change or add any words otherwise. no adding titles or anything. no adding things to clarify who said what. no markdown formatting because we don't have a renderer. if you think that something has been flattened in terms of a list, indentation, or spacing, add it if you think it's useful in being able to read it.
+  `output this verbatim with nothing left out but formatted in a way makes it easier to read. if you see artifacts of bad copy-pasting (like stuff that could plausibly be from a button, random text that doesn't make sense in the sentence that was interleaved from something which removed make it easier to read (random Edit or DG or something like that which should be removed) etc.), remove them, otherwise keep everything the same. only output in a \`\`\`txt codeblock, no commentary since ill use grep to extract the content. add --- delineations between sections. we'll be splitting on these as chapters for an incremental reading software. each section will be used as an all encomppassing unit of information to extract questions for. we want to minimize the number of sections. keep things together where you can instead of splitting them up if they are related, like question answer pairs. if it's a chat, keep the user query and assistant response together in one section.
+
+remove and add newlines where you see fit but try to keep it tight (like within lists) without excessive spacing so that it's information dense. do not change or add any words otherwise. no adding titles or anything. no adding things to clarify who said what. add minial markdown formatting. if you think that something has been flattened in terms of a list, indentation, quotes (>), or spacing, add it if you think it's useful in being able to read it.
 
 content to format
 \`\`\`
@@ -33,7 +35,8 @@ ${content}
 const getQuestionGeneratorPrompt = (
   slide: string,
   selection: string,
-  exampleQuestions: string
+  exampleQuestions: string,
+  deletedQuestions?: string
 ) =>
   `
 the following is a past conversation i had to understand a concept. i need to consolidate every piece of understanding i had here in spaced repetition cards. I'm going to incrementally add questions I've made myself here to keep track of where I'm at and to give you an idea of what questions I'm trying to extract. we need to do this till we get to the end of the conversation. you should know the principles of piotr wozniak of making proper spaced repetition questions that are useful as opposed to questions for the sake of questions. the questions need to me atomic and low mental overhead (very easy to answer). but not so easy that they're leading or reduced to a yes or no answer.they should build on each other instead of making a big one. there should be one clear answer that anyone who understood it would be able to give without having seen the answer before.
@@ -53,12 +56,23 @@ these are some questions we've made together so far. some of them have edited ve
 ${exampleQuestions}
 </questions>
 
+${
+  deletedQuestions
+    ? `
+these are questions that were previously deleted, which can help you understand what kinds of questions weren't useful:
+<deleted_questions>
+${deletedQuestions}
+</deleted_questions>
+`
+    : ""
+}
+
 please make an exhaustive list of spaced repetition questions that i would extract from the selection.
 `;
 
 const getExtractionPrompt = (msg: string) =>
   `
-extract out the questions from this conversation output.
+extract out the questions from this conversation output. don't include extraneous information or questions that aren't part of the question answer format.
 
 <full_conversation>
 ${msg}
@@ -100,7 +114,8 @@ export async function formatContent(content: string): Promise<string> {
 export async function generateQuestions(
   content: string,
   selection: string,
-  exampleQuestions: FlashCardType[]
+  exampleQuestions: FlashCardType[],
+  deletedCards?: FlashCardType[]
 ): Promise<FlashCardType[]> {
   console.log(
     "Generating questions for selection:",
@@ -119,7 +134,8 @@ export async function generateQuestions(
         content: getQuestionGeneratorPrompt(
           content,
           selection,
-          JSON.stringify(exampleQuestions, null, 2)
+          JSON.stringify(exampleQuestions, null, 2),
+          deletedCards ? JSON.stringify(deletedCards, null, 2) : undefined
         ),
       },
     ],

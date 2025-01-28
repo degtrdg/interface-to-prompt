@@ -8,15 +8,13 @@ import { cn } from "@/lib/utils";
 
 interface FlashCardProps {
   card: FlashCardType;
-  index: number;
-  onUpdate: (index: number, card: FlashCardType) => void;
-  onDelete: (index: number) => void;
+  onUpdate: (card: FlashCardType) => void;
+  onDelete: (card: FlashCardType) => void;
   isNew?: boolean;
 }
 
 export const FlashCard: React.FC<FlashCardProps> = ({
   card,
-  index,
   onUpdate,
   onDelete,
   isNew = false,
@@ -49,7 +47,7 @@ export const FlashCard: React.FC<FlashCardProps> = ({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!editedCard.original) {
-        onUpdate(index, {
+        onUpdate({
           ...editedCard,
           original: {
             front: card.front,
@@ -57,7 +55,7 @@ export const FlashCard: React.FC<FlashCardProps> = ({
           },
         });
       } else {
-        onUpdate(index, editedCard);
+        onUpdate(editedCard);
       }
       setIsEditing(false);
     } else if (e.key === "Escape") {
@@ -104,9 +102,19 @@ export const FlashCard: React.FC<FlashCardProps> = ({
               onBlur={() => setIsFocused(false)}
               onKeyDown={handleKeyDown}
             />
+            <AutoResizeTextArea
+              value={editedCard.comment || ""}
+              onChange={(e) =>
+                setEditedCard({ ...editedCard, comment: e.target.value })
+              }
+              placeholder="Add a comment (optional)"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onKeyDown={handleKeyDown}
+            />
           </div>
           <button
-            onClick={() => onDelete(index)}
+            onClick={() => onDelete(editedCard)}
             className="text-gray-400 hover:text-red-500 transition-colors"
           >
             <Trash2 size={16} />
@@ -129,6 +137,11 @@ export const FlashCard: React.FC<FlashCardProps> = ({
           <div className="flex-1">
             <div className="font-medium">{displayCard.front}</div>
             <div className="text-sm text-gray-600 mt-1">{displayCard.back}</div>
+            {displayCard.comment && (
+              <div className="text-sm text-gray-400 mt-1 italic">
+                {displayCard.comment}
+              </div>
+            )}
           </div>
           <div className="flex gap-2 opacity-0 group-hover:opacity-100">
             {isEdited && (
@@ -152,7 +165,7 @@ export const FlashCard: React.FC<FlashCardProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onDelete(index);
+                onDelete(card);
               }}
               className="text-gray-400 hover:text-red-500 transition-all"
             >

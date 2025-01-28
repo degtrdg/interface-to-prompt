@@ -8,8 +8,8 @@ import { AutoResizeTextArea } from "@/app/_components/auto-resize-textarea";
 
 interface FocusCardsReviewProps {
   generatedCards: FlashCardType[];
-  onUpdate: (index: number, updated: FlashCardType) => void;
-  onDelete: (index: number) => void;
+  onUpdate: (updatedCard: FlashCardType) => void;
+  onDelete: (card: FlashCardType) => void;
   onCloseFocus: () => void;
   onAccept: (card: FlashCardType) => void;
 }
@@ -21,50 +21,58 @@ export const FocusCardsReview: React.FC<FocusCardsReviewProps> = ({
   onCloseFocus,
   onAccept,
 }) => {
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const currentCard = generatedCards[focusedIndex];
+  // Store the ID of the focused card instead of an index
+  const [focusedCardId, setFocusedCardId] = useState<string | null>(
+    generatedCards.length > 0 ? generatedCards[0].id : null
+  );
 
-  const handleTextChange = (field: "front" | "back", text: string) => {
-    onUpdate(focusedIndex, {
-      ...currentCard,
-      [field]: text,
-    });
+  // Find the current card by ID
+  const currentCard = generatedCards.find((c) => c.id === focusedCardId);
+
+  // Get the current index for display purposes
+  const currentIndex = currentCard
+    ? generatedCards.findIndex((c) => c.id === currentCard.id)
+    : -1;
+
+  // If there's no card that matches the ID, close focus or move to next available
+  useEffect(() => {
+    if (!currentCard && generatedCards.length > 0) {
+      setFocusedCardId(generatedCards[0].id);
+    } else if (generatedCards.length === 0) {
+      onCloseFocus();
+    }
+  }, [generatedCards, currentCard, onCloseFocus]);
+
+  const handleTextChange = (
+    field: "front" | "back" | "comment",
+    text: string
+  ) => {
+    if (!currentCard) return;
+    onUpdate({ ...currentCard, [field]: text });
   };
 
   const handleDelete = () => {
-    onDelete(focusedIndex);
-
-    // If we've removed the last card, close focus entirely
-    if (generatedCards.length <= 1) {
-      onCloseFocus();
-    } else {
-      // If we removed something in the middle, remain at the same index if possible
-      setFocusedIndex((prev) => Math.min(prev, generatedCards.length - 2));
+    if (currentCard) {
+      onDelete(currentCard);
     }
   };
 
   const handleAccept = () => {
-    onAccept(currentCard);
-    onDelete(focusedIndex); // Remove the card from generated cards after accepting
-
-    // If we've accepted the last card, close focus entirely
-    if (generatedCards.length <= 1) {
-      onCloseFocus();
-    } else {
-      // Move to next card if available
-      setFocusedIndex((prev) => Math.min(prev + 1, generatedCards.length - 2)); // -2 because we're removing a card
+    if (currentCard) {
+      onAccept(currentCard);
+      onDelete(currentCard);
     }
   };
 
   const handlePrevious = () => {
-    if (focusedIndex > 0) {
-      setFocusedIndex((prev) => prev - 1);
+    if (currentIndex > 0) {
+      setFocusedCardId(generatedCards[currentIndex - 1].id);
     }
   };
 
   const handleNext = () => {
-    if (focusedIndex < generatedCards.length - 1) {
-      setFocusedIndex((prev) => prev + 1);
+    if (currentIndex < generatedCards.length - 1) {
+      setFocusedCardId(generatedCards[currentIndex + 1].id);
     }
   };
 
@@ -72,9 +80,9 @@ export const FocusCardsReview: React.FC<FocusCardsReviewProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check if we're in a text input
-      const target = e.target as HTMLElement;
-      const isInInput =
-        target.tagName === "TEXTAREA" || target.tagName === "INPUT";
+      //   const target = e.target as HTMLElement;
+      //   const isInInput =
+      //     target.tagName === "TEXTAREA" || target.tagName === "INPUT";
 
       if (e.metaKey || e.ctrlKey) {
         switch (e.key) {
@@ -95,22 +103,28 @@ export const FocusCardsReview: React.FC<FocusCardsReviewProps> = ({
             handleNext();
             break;
         }
+      } else if (e.key === "Escape") {
+        onCloseFocus();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentCard, focusedIndex, generatedCards.length]); // Added navigation-related dependencies
+  }, [currentCard]);
+
+  if (!currentCard) {
+    return null;
+  }
 
   return (
-    <Card className="w-full p-4 flex flex-col h-full">
+    <Card className="w-[600px] p-4 flex flex-col h-full">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <Button variant="ghost" onClick={onCloseFocus}>
           Exit Focus Mode (Esc)
         </Button>
         <div className="text-sm text-gray-500">
-          Card {focusedIndex + 1} of {generatedCards.length}
+          Card {currentIndex + 1} of {generatedCards.length}
         </div>
       </div>
 
@@ -135,6 +149,16 @@ export const FocusCardsReview: React.FC<FocusCardsReviewProps> = ({
             onChange={(e) => handleTextChange("back", e.target.value)}
           />
         </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm text-gray-600">Comment (optional):</label>
+          <AutoResizeTextArea
+            className="border p-2 rounded"
+            placeholder="Add a comment..."
+            value={currentCard.comment || ""}
+            onChange={(e) => handleTextChange("comment", e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Footer actions */}
@@ -142,14 +166,14 @@ export const FocusCardsReview: React.FC<FocusCardsReviewProps> = ({
         <div className="flex gap-2">
           <Button
             variant="outline"
-            disabled={focusedIndex === 0}
+            disabled={currentIndex === 0}
             onClick={handlePrevious}
           >
             ← Previous (⌘←)
           </Button>
           <Button
             variant="outline"
-            disabled={focusedIndex === generatedCards.length - 1}
+            disabled={currentIndex === generatedCards.length - 1}
             onClick={handleNext}
           >
             Next (⌘→) →
