@@ -20,6 +20,7 @@ interface DeletedCardsManagerProps {
   onPermanentDelete: (card: FlashCardType) => void;
   onClearAll: () => void;
   className?: string;
+  shouldWarnAboutExcess?: boolean;
 }
 
 export function DeletedCardsManager({
@@ -28,6 +29,7 @@ export function DeletedCardsManager({
   onPermanentDelete,
   onClearAll,
   className,
+  shouldWarnAboutExcess = false,
 }: DeletedCardsManagerProps) {
   if (deletedCards.length === 0) return null;
 
@@ -38,10 +40,13 @@ export function DeletedCardsManager({
     return dateA - dateB; // Oldest first
   });
 
-  // First currentCardsCount are safe (oldest ones)
-  const safeCards = sortedCards.slice(0, currentCardsCount);
-  // Rest are at risk (newer ones)
-  const atRiskCards = sortedCards.slice(currentCardsCount);
+  // Only split into safe/at risk if shouldWarnAboutExcess is true
+  const safeCards = shouldWarnAboutExcess
+    ? sortedCards.slice(0, currentCardsCount)
+    : [];
+  const atRiskCards = shouldWarnAboutExcess
+    ? sortedCards.slice(currentCardsCount)
+    : [];
 
   return (
     <Card className={cn("p-4", className)}>
@@ -58,55 +63,70 @@ export function DeletedCardsManager({
           </Button>
         </div>
         <CollapsibleContent className="pt-2">
-          {excessCardCount > 0 && (
-            <Alert variant="warning" className="mb-4">
+          {shouldWarnAboutExcess && excessCardCount > 0 && (
+            <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Warning</AlertTitle>
               <AlertDescription>
                 You have {excessCardCount} more deleted cards than current
                 cards. The {excessCardCount} most recently deleted cards will be
                 permanently deleted when you next generate questions. Review
-                these cards below and restore any you want to keep. We're doing
-                this because we don't want to overwhelm the prompt with negative
-                examples.
+                these cards below and restore any you want to keep. We&apos;re
+                doing this because we don&apos;t want to overwhelm the prompt
+                with negative examples.
               </AlertDescription>
             </Alert>
           )}
 
           <div className="space-y-3">
-            {safeCards.length > 0 && (
+            {shouldWarnAboutExcess ? (
               <>
-                <div className="text-sm font-medium text-gray-500 pt-2">
-                  Keeping {safeCards.length} oldest deleted cards:
-                </div>
-                {safeCards.map((card) => (
-                  <FlashCardComponent
-                    key={card.id}
-                    card={card}
-                    onDelete={() => onPermanentDelete(card)}
-                    onUpdate={() => {}}
-                    isNew={false}
-                  />
-                ))}
-              </>
-            )}
+                {safeCards.length > 0 && (
+                  <div key="safe-cards-section">
+                    <div className="text-sm font-medium text-gray-500 pt-2">
+                      Keeping {safeCards.length} oldest deleted cards:
+                    </div>
+                    {safeCards.map((card) => (
+                      <FlashCardComponent
+                        key={card.id}
+                        card={card}
+                        onDelete={() => onPermanentDelete(card)}
+                        onUpdate={() => {}}
+                        isNew={false}
+                      />
+                    ))}
+                  </div>
+                )}
 
-            {atRiskCards.length > 0 && (
-              <>
-                <div className="text-sm font-medium text-red-500 pt-4">
-                  {atRiskCards.length} cards at risk of deletion (most recently
-                  deleted):
-                </div>
-                {atRiskCards.map((card) => (
-                  <FlashCardComponent
-                    key={card.id}
-                    card={card}
-                    onDelete={() => onPermanentDelete(card)}
-                    onUpdate={() => {}}
-                    isNew={false}
-                  />
-                ))}
+                {atRiskCards.length > 0 && (
+                  <div key="at-risk-cards-section">
+                    <div className="text-sm font-medium text-red-500 pt-4">
+                      {atRiskCards.length} cards at risk of deletion (most
+                      recently deleted):
+                    </div>
+                    {atRiskCards.map((card) => (
+                      <FlashCardComponent
+                        key={card.id}
+                        card={card}
+                        onDelete={() => onPermanentDelete(card)}
+                        onUpdate={() => {}}
+                        isNew={false}
+                      />
+                    ))}
+                  </div>
+                )}
               </>
+            ) : (
+              // When not warning about excess, just show all cards in chronological order
+              sortedCards.map((card) => (
+                <FlashCardComponent
+                  key={card.id}
+                  card={card}
+                  onDelete={() => onPermanentDelete(card)}
+                  onUpdate={() => {}}
+                  isNew={false}
+                />
+              ))
             )}
           </div>
         </CollapsibleContent>

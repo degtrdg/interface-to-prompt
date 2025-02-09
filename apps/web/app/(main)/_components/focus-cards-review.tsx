@@ -80,11 +80,11 @@ export const FocusCardsReview: React.FC<FocusCardsReviewProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check if we're in a text input
-      //   const target = e.target as HTMLElement;
-      //   const isInInput =
-      //     target.tagName === "TEXTAREA" || target.tagName === "INPUT";
+      const target = e.target as HTMLElement;
+      const isInInput =
+        target.tagName === "TEXTAREA" || target.tagName === "INPUT";
 
-      if (e.metaKey || e.ctrlKey) {
+      if ((e.metaKey || e.ctrlKey) && !isInInput) {
         switch (e.key) {
           case "Enter":
             e.preventDefault();

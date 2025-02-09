@@ -8,26 +8,25 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { cn } from "@/lib/utils";
+import { useEditorStore } from "@/app/stores/editor-store";
 
 interface FocusTextReviewProps {
   sections: string[];
   onGenerateQuestions: (selectedText: string) => void;
-  onCloseFocus: () => void;
   isGenerating: boolean;
 }
 
 export const FocusTextReview: React.FC<FocusTextReviewProps> = ({
   sections,
   onGenerateQuestions,
-  onCloseFocus,
   isGenerating,
 }) => {
+  const { setSelectedText, selectedText } = useEditorStore();
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const currentSection = sections[focusedIndex];
 
-  //   useEffect(() => {
-  //     onGenerateQuestions(currentSection);
-  //   }, [currentSection, onGenerateQuestions]);
+  useEffect(() => {
+    setSelectedText(sections[focusedIndex]);
+  }, [focusedIndex, sections, setSelectedText]);
 
   const handlePrevious = () => {
     if (focusedIndex > 0) {
@@ -47,39 +46,45 @@ export const FocusTextReview: React.FC<FocusTextReviewProps> = ({
         <div className="flex gap-2">
           <Button
             variant="outline"
-            disabled={focusedIndex === 0}
+            disabled={focusedIndex === 0 || isGenerating}
             onClick={handlePrevious}
           >
             ← Previous
           </Button>
           <Button
             variant="outline"
-            disabled={focusedIndex === sections.length - 1}
+            disabled={focusedIndex === sections.length - 1 || isGenerating}
             onClick={handleNext}
           >
             Next →
           </Button>
         </div>
-        <Button
-          variant="default"
-          onClick={() => onGenerateQuestions(currentSection)}
-          disabled={isGenerating}
-        >
-          {isGenerating ? "Generating Questions..." : "Generate Questions"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="default"
+            onClick={() => {
+              console.log(
+                "Generating questions for section front:",
+                selectedText
+              );
+              onGenerateQuestions(selectedText);
+            }}
+            disabled={isGenerating}
+          >
+            {isGenerating ? "Generating Questions..." : "Generate Questions"}
+          </Button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
             code({
-              node,
               inline,
               className,
               children,
               ...props
             }: {
-              node?: any;
               inline?: boolean;
               className?: string;
               children?: React.ReactNode;
@@ -135,7 +140,7 @@ export const FocusTextReview: React.FC<FocusTextReviewProps> = ({
             ),
           }}
         >
-          {currentSection}
+          {selectedText}
         </ReactMarkdown>
       </div>
 

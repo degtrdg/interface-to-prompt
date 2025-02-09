@@ -1,25 +1,18 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import TextareaAutosize, {
   TextareaAutosizeProps,
 } from "react-textarea-autosize";
 
-export interface AutoResizeTextAreaProps extends TextareaAutosizeProps {
-  onFocus?: () => void;
-  onBlur?: () => void;
-}
+export type AutoResizeTextAreaProps = TextareaAutosizeProps;
 
-export const AutoResizeTextArea: React.FC<AutoResizeTextAreaProps> = ({
-  onFocus,
-  onBlur,
-  ...props
-}) => {
+export const AutoResizeTextArea: React.FC<AutoResizeTextAreaProps> = (
+  props
+) => {
   return (
     <TextareaAutosize
       className="w-full p-2 border rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-      onFocus={onFocus}
-      onBlur={onBlur}
       {...props}
     />
   );

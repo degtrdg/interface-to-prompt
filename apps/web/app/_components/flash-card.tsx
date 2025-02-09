@@ -22,7 +22,6 @@ export const FlashCard: React.FC<FlashCardProps> = ({
   const [isEditing, setIsEditing] = useState(isNew);
   const [editedCard, setEditedCard] = useState(card);
   const [showingOriginal, setShowingOriginal] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,15 +32,12 @@ export const FlashCard: React.FC<FlashCardProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
         setIsEditing(false);
-        if (!isFocused) {
-          setEditedCard(card);
-        }
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [card, isFocused]);
+  }, [card]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -88,8 +84,6 @@ export const FlashCard: React.FC<FlashCardProps> = ({
               }
               placeholder="Question (Enter to save, Shift+Enter for new line, Esc to cancel)"
               autoFocus
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
               onKeyDown={handleKeyDown}
             />
             <AutoResizeTextArea
@@ -98,8 +92,6 @@ export const FlashCard: React.FC<FlashCardProps> = ({
                 setEditedCard({ ...editedCard, back: e.target.value })
               }
               placeholder="Answer"
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
               onKeyDown={handleKeyDown}
             />
             <AutoResizeTextArea
@@ -108,8 +100,6 @@ export const FlashCard: React.FC<FlashCardProps> = ({
                 setEditedCard({ ...editedCard, comment: e.target.value })
               }
               placeholder="Add a comment (optional)"
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
               onKeyDown={handleKeyDown}
             />
           </div>
