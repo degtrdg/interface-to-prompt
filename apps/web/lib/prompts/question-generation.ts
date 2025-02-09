@@ -40,6 +40,8 @@ ${deletedQuestions}
     : ""
 }
 
+if the core idea of a question is already covered by a previous question, don't make a new question unless there's a specific reason to do so.
+
 please make an exhaustive list of spaced repetition questions that i would extract from the selection.`;
 
   return prompt;

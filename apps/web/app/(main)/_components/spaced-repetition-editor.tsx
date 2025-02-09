@@ -20,6 +20,7 @@ import { DeletedCardsManager } from "@/app/_components/deleted-cards-manager";
 import { PromptViewerModal } from "@/app/_components/prompt-viewer-modal";
 import { useEditorStore } from "@/app/stores/editor-store";
 import { useCardsStore } from "@/app/stores/cards-store";
+import { exportToAnkiCSV, downloadAsFile } from "@/lib/utils/export";
 
 const SpacedRepetitionEditor: React.FC = () => {
   // Editor state from store
@@ -160,6 +161,20 @@ const SpacedRepetitionEditor: React.FC = () => {
               </CollapsibleContent>
             </Collapsible>
           </div>
+
+          {/* Export to Anki Button */}
+          {cards.length > 0 && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                const csvContent = exportToAnkiCSV(cards);
+                downloadAsFile(csvContent, "questions_and_answers.csv");
+              }}
+            >
+              Export {cards.length} Cards to CSV
+            </Button>
+          )}
 
           <Separator className="my-2" />
 
