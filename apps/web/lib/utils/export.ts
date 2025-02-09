@@ -2,7 +2,7 @@ import { FlashCardType } from "@/lib/types/flashcard";
 
 export const exportToAnkiCSV = (cards: FlashCardType[]): string => {
   // Create CSV header
-  const header = "Question,Answer,Comment\n";
+  const header = "Question,Answer\n";
 
   // Convert cards to CSV format
   const cardRows = cards
@@ -10,10 +10,8 @@ export const exportToAnkiCSV = (cards: FlashCardType[]): string => {
       // Escape quotes and handle newlines
       const front = card.front.replace(/"/g, '""').replace(/\n/g, " ");
       const back = card.back.replace(/"/g, '""').replace(/\n/g, " ");
-      const comment =
-        card.comment?.replace(/"/g, '""').replace(/\n/g, " ") || "";
       // Wrap in quotes to handle commas in content
-      return `"${front}","${back}","${comment}"`;
+      return `"${front}","${back}"`;
     })
     .join("\n");
 
